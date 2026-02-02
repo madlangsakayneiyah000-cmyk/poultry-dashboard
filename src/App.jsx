@@ -3,6 +3,54 @@ import React, { useState, useEffect } from "react";
 // ⚙️ BACKEND URL - Your Render backend
 const BACKEND_URL = "https://poultry-backend-pwpf.onrender.com";
 
+// ===== DYNAMIC STATUS HELPERS =====
+function getTemperatureStatus(temp) {
+  if (temp === null || temp === undefined) return { text: "No data", color: "#9ca3af" };
+  if (temp >= 24 && temp <= 26) return { text: "Optimal", color: "#10b981" };
+  if (temp > 26 && temp < 29) return { text: "Warning", color: "#f59e0b" };
+  if (temp >= 29) return { text: "Critical", color: "#ef4444" };
+  if (temp < 22) return { text: "Too Cold", color: "#3b82f6" };
+  return { text: "Normal", color: "#10b981" };
+}
+
+function getHumidityStatus(humidity) {
+  if (humidity === null || humidity === undefined) return { text: "No data", color: "#9ca3af" };
+  if (humidity >= 60 && humidity <= 80) return { text: "Optimal", color: "#10b981" };
+  if (humidity > 80 && humidity < 85) return { text: "Warning", color: "#f59e0b" };
+  if (humidity >= 85) return { text: "Critical", color: "#ef4444" };
+  if (humidity < 55) return { text: "Too Dry", color: "#f59e0b" };
+  return { text: "Normal", color: "#10b981" };
+}
+
+function getAmmoniaStatus(ammonia) {
+  if (ammonia === null || ammonia === undefined) return { text: "No data", color: "#9ca3af" };
+  if (ammonia >= 0 && ammonia <= 5) return { text: "Safe", color: "#10b981" };
+  if (ammonia > 5 && ammonia <= 20) return { text: "Elevated", color: "#f59e0b" };
+  if (ammonia > 20) return { text: "Dangerous", color: "#ef4444" };
+  return { text: "Normal", color: "#10b981" };
+}
+
+function getMethaneStatus(methane) {
+  if (methane === null || methane === undefined) return { text: "No data", color: "#9ca3af" };
+  if (methane >= 0 && methane <= 2) return { text: "Safe", color: "#10b981" };
+  if (methane > 2 && methane <= 5) return { text: "Elevated", color: "#f59e0b" };
+  if (methane > 5) return { text: "Dangerous", color: "#ef4444" };
+  return { text: "Normal", color: "#10b981" };
+}
+
+function getFanStatus(rpm, duty) {
+  if (rpm === null || rpm === undefined) return { text: "No data", color: "#9ca3af" };
+  if (rpm === 0 && duty > 50) return { text: "Fault", color: "#ef4444" };
+  if (rpm > 0) return { text: "Running", color: "#10b981" };
+  return { text: "Stopped", color: "#6b7280" };
+}
+
+function getLightStatus(status) {
+  if (!status) return { text: "No data", color: "#9ca3af" };
+  if (status === "ON") return { text: "Active", color: "#10b981" };
+  return { text: "Off", color: "#6b7280" };
+}
+
 function App() {
   // ===== STATE MANAGEMENT =====
   const [latestSensor, setLatestSensor] = useState(null);
@@ -456,104 +504,104 @@ function DashboardPage({
             gap: 12,
           }}
         >
+          <<ParamCard
+  icon="🌡️"
+  title="Temperature"
+  value={
+    latestSensor && typeof latestSensor.temperature === "number"
+      ? `${latestSensor.temperature.toFixed(1)}°C`
+      : sensorLoading ? "Loading..." : "—"
+  }
+  status={getTemperatureStatus(latestSensor?.temperature).text}
+  statusColor={getTemperatureStatus(latestSensor?.temperature).color}
+  bgColor="#e0f2fe"
+  note="Target: 24–26°C"
+/>
+<ParamCard
+  icon="💧"
+  title="Humidity"
+  value={
+    latestSensor && typeof latestSensor.humidity === "number"
+      ? `${latestSensor.humidity.toFixed(0)}%`
+      : sensorLoading ? "Loading..." : "—"
+  }
+  status={getHumidityStatus(latestSensor?.humidity).text}
+  statusColor={getHumidityStatus(latestSensor?.humidity).color}
+  bgColor="#dcfce7"
+  note="Target: 60–80%"
+/>
+
+         
           <ParamCard
-            icon="🌡️"
-            title="Temperature"
-            value={
-              latestSensor && typeof latestSensor.temperature === "number"
-                ? `${latestSensor.temperature.toFixed(1)}°C`
-                : sensorLoading
-                ? "Loading..."
-                : "—"
-            }
-            status="Within range"
-            bgColor="#e0f2fe"
-            note="Target: 24–26°C"
-          />
+  icon="☁️"
+  title="Ammonia (NH₃)"
+  value={
+    latestSensor && typeof latestSensor.ammonia === "number"
+      ? `${latestSensor.ammonia.toFixed(1)} ppm`
+      : sensorLoading ? "Loading..." : "—"
+  }
+  status={getAmmoniaStatus(latestSensor?.ammonia).text}
+  statusColor={getAmmoniaStatus(latestSensor?.ammonia).color}
+  bgColor="#fef3c7"
+  note="Optimal: 0–5 ppm"
+/>
+<ParamCard
+  icon="💨"
+  title="Methane (CH₄)"
+  value={
+    latestSensor && typeof latestSensor.methane === "number"
+      ? `${latestSensor.methane.toFixed(1)} ppm`
+      : sensorLoading ? "Loading..." : "—"
+  }
+  status={getMethaneStatus(latestSensor?.methane).text}
+  statusColor={getMethaneStatus(latestSensor?.methane).color}
+  bgColor="#fecaca"
+  note="Optimal: 0–2 ppm"
+/>
+
+          
           <ParamCard
-            icon="💧"
-            title="Humidity"
-            value={
-              latestSensor && typeof latestSensor.humidity === "number"
-                ? `${latestSensor.humidity.toFixed(0)}%`
-                : sensorLoading
-                ? "Loading..."
-                : "—"
-            }
-            status="Within range"
-            bgColor="#dcfce7"
-            note="Target: 60–80%"
-          />
+  icon="📄"
+  title="Positive Pressure Fan"
+  value={
+    latestSensor && typeof latestSensor.fanIntakeRpm === "number"
+      ? `${latestSensor.fanIntakeRpm.toFixed(0)} rpm`
+      : sensorLoading ? "Loading..." : "—"
+  }
+  status={getFanStatus(latestSensor?.fanIntakeRpm, latestSensor?.fanIntakeDuty).text}
+  statusColor={getFanStatus(latestSensor?.fanIntakeRpm, latestSensor?.fanIntakeDuty).color}
+  bgColor="#cffafe"
+  note="Intake fan"
+/>
+
           <ParamCard
-            icon="☁️"
-            title="Ammonia (NH₃)"
-            value={
-              latestSensor && typeof latestSensor.ammonia === "number"
-                ? `${latestSensor.ammonia.toFixed(1)} ppm`
-                : sensorLoading
-                ? "Loading..."
-                : "—"
-            }
-            status="Safe"
-            bgColor="#fef3c7"
-            note="Optimal: 0–5 ppm"
-          />
+  icon="📄"
+  title="Exhaust Fan"
+  value={
+    latestSensor && typeof latestSensor.fanExhaustRpm === "number"
+      ? `${latestSensor.fanExhaustRpm.toFixed(0)} rpm`
+      : sensorLoading ? "Loading..." : "—"
+  }
+  status={getFanStatus(latestSensor?.fanExhaustRpm, latestSensor?.fanExhaustDuty).text}
+  statusColor={getFanStatus(latestSensor?.fanExhaustRpm, latestSensor?.fanExhaustDuty).color}
+  bgColor="#cffafe"
+  note="Exhaust fan"
+/>
+
           <ParamCard
-            icon="💨"
-            title="Methane (CH₄)"
-            value={
-              latestSensor && typeof latestSensor.methane === "number"
-                ? `${latestSensor.methane.toFixed(1)} ppm`
-                : sensorLoading
-                ? "Loading..."
-                : "—"
-            }
-            status="Normal"
-            bgColor="#fecaca"
-            note="Optimal: 0–2 ppm"
-          />
-          <ParamCard
-            icon="📄"
-            title="Positive Pressure Fan"
-            value={
-              latestSensor && typeof latestSensor.fanIntakeRpm === "number"
-                ? `${latestSensor.fanIntakeRpm.toFixed(0)} rpm`
-                : sensorLoading
-                ? "Loading..."
-                : "—"
-            }
-            status="Auto (PID)"
-            bgColor="#cffafe"
-            note="Intake fan"
-          />
-          <ParamCard
-            icon="📄"
-            title="Exhaust Fan"
-            value={
-              latestSensor && typeof latestSensor.fanExhaustRpm === "number"
-                ? `${latestSensor.fanExhaustRpm.toFixed(0)} rpm`
-                : sensorLoading
-                ? "Loading..."
-                : "—"
-            }
-            status="Auto (PID)"
-            bgColor="#cffafe"
-            note="Exhaust fan"
-          />
-          <ParamCard
-            icon="☀️"
-            title="Lighting"
-            value={
-              latestSensor && typeof latestSensor.lightStatus === "string"
-                ? latestSensor.lightStatus
-                : sensorLoading
-                ? "Loading..."
-                : "—"
-            }
-            status="Growing schedule"
-            bgColor="#fef08a"
-            note="20–40 lux"
-          />
+  icon="☀️"
+  title="Lighting"
+  value={
+    latestSensor && typeof latestSensor.lightStatus === "string"
+      ? latestSensor.lightStatus
+      : sensorLoading ? "Loading..." : "—"
+  }
+  status={getLightStatus(latestSensor?.lightStatus).text}
+  statusColor={getLightStatus(latestSensor?.lightStatus).color}
+  bgColor="#fef08a"
+  note="20–40 lux"
+/>
+
         </div>
       </section>
 
@@ -748,40 +796,15 @@ function SidebarButton({ icon, label, active, onClick }) {
   );
 }
 
-function ParamCard({ icon, title, value, status, bgColor, note }) {
+function ParamCard({ icon, title, value, status, statusColor, bgColor, note }) {
   return (
-    <div
-      style={{
-        background: bgColor,
-        border: "1px solid rgba(0,0,0,0.08)",
-        borderRadius: 10,
-        padding: 14,
-        transition: "all 0.2s ease",
-      }}
-    >
+    <div style={{ background: bgColor, border: "1px solid rgba(0,0,0,0.08)", borderRadius: 10, padding: 14, transition: "all 0.2s ease" }}>
       <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 6 }}>
         <span style={{ fontSize: 24 }}>{icon}</span>
-        <h3 style={{ fontSize: 12, margin: 0, color: "#6b7280", fontWeight: 500 }}>
-          {title}
-        </h3>
+        <h3 style={{ fontSize: 12, margin: 0, color: "#6b7280", fontWeight: 500 }}>{title}</h3>
       </div>
-      <p style={{ fontSize: 22, fontWeight: 700, margin: 0, color: "#111827", marginBottom: 6 }}>
-        {value}
-      </p>
-      <p
-        style={{
-          fontSize: 11,
-          fontWeight: 600,
-          padding: "4px 8px",
-          borderRadius: 4,
-          display: "inline-block",
-          background: "#dcfce7",
-          color: "#166534",
-          margin: "4px 0 0",
-        }}
-      >
-        {status}
-      </p>
+      <p style={{ fontSize: 22, fontWeight: 700, margin: 0, color: "#111827", marginBottom: 6 }}>{value}</p>
+      <p style={{ fontSize: 11, fontWeight: 600, padding: "4px 8px", borderRadius: 4, display: "inline-block", background: statusColor || "#dcfce7", color: "white", margin: "4px 0 0" }}>{status}</p>
       <p style={{ fontSize: 10, margin: "4px 0 0", color: "#9ca3af" }}>{note}</p>
     </div>
   );
