@@ -504,7 +504,7 @@ function DashboardPage({
             gap: 12,
           }}
         >
-          <<ParamCard
+          <ParamCard
   icon="🌡️"
   title="Temperature"
   value={
