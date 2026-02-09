@@ -56,6 +56,7 @@ function App() {
   const [latestSensor, setLatestSensor] = useState(null);
   const [sensorLoading, setSensorLoading] = useState(false);
   const [sensorError, setSensorError] = useState(null);
+  const [lastUpdateAgeSeconds, setLastUpdateAgeSeconds] = useState(null);
 
   const [activePage, setActivePage] = useState("dashboard");
   const [sidebarOpen, setSidebarOpen] = useState(true);
@@ -76,44 +77,66 @@ function App() {
   const [washerTime, setWasherTime] = useState(45);
 
   // ===== FETCH LATEST SENSOR DATA =====
-  useEffect(() => {
-    const fetchLatestSensor = async () => {
-      try {
-        setSensorLoading(true);
-        setSensorError(null);
+useEffect(() => {
+  const fetchLatestSensor = async () => {
+    try {
+      setSensorLoading(true);
+      setSensorError(null);
 
-        const res = await fetch(`${BACKEND_URL}/api/sensors/latest`);
+      const res = await fetch(`${BACKEND_URL}/api/sensors/latest`);
 
-        if (!res.ok) {
-          if (res.status === 404) {
-            setLatestSensor(null);
-            return;
-          }
-          throw new Error("Failed to fetch sensor data");
+      if (!res.ok) {
+        if (res.status === 404) {
+          setLatestSensor(null);
+          setLastUpdateAgeSeconds(null);
+          return;
         }
-
-        const data = await res.json();
-        setLatestSensor(data);
-
-        // Update actuator states from sensor data
-        if (data.lightStatus) setLightsState(data.lightStatus);
-        if (data.pressureWasherStatus) {
-          setWasherRunning(data.pressureWasherStatus === "ON");
-        }
-      } catch (err) {
-        console.error("Error fetching sensor data:", err);
-        setSensorError(err.message || "Error fetching sensor data");
-      } finally {
-        setSensorLoading(false);
+        throw new Error("Failed to fetch sensor data");
       }
-    };
 
-    fetchLatestSensor();
+      const data = await res.json();
+      setLatestSensor(data);
 
-    // Auto-refresh every 30 seconds
-    const intervalId = setInterval(fetchLatestSensor, 30000);
-    return () => clearInterval(intervalId);
-  }, []);
+      // compute initial age based on createdAt
+      if (data.createdAt) {
+        const created = new Date(data.createdAt);
+        const ageSec = Math.floor((Date.now() - created.getTime()) / 1000);
+        setLastUpdateAgeSeconds(ageSec);
+      } else {
+        setLastUpdateAgeSeconds(null);
+      }
+
+      // Update actuator states from sensor data
+      if (data.lightStatus) setLightsState(data.lightStatus);
+      if (data.pressureWasherStatus) {
+        setWasherRunning(data.pressureWasherStatus === "ON");
+      }
+    } catch (err) {
+      console.error("Error fetching sensor data:", err);
+      setSensorError(err.message || "Error fetching sensor data");
+    } finally {
+      setSensorLoading(false);
+    }
+  };
+
+  fetchLatestSensor();
+
+   const intervalId = setInterval(fetchLatestSensor, 30000);
+  return () => clearInterval(intervalId);
+}, []);
+
+useEffect(() => {
+  let interval;
+  if (latestSensor && latestSensor.createdAt) {
+    interval = setInterval(() => {
+      const created = new Date(latestSensor.createdAt);
+      const ageSec = Math.floor((Date.now() - created.getTime()) / 1000);
+      setLastUpdateAgeSeconds(ageSec);
+    }, 1000);
+  }
+  return () => clearInterval(interval);
+}, [latestSensor]);
+
 
   // ===== FETCH HISTORICAL DATA FOR CHARTS =====
   useEffect(() => {
@@ -434,6 +457,7 @@ function App() {
               fanInState={fanInState}
               fanOutState={fanOutState}
               sendControlCommand={sendControlCommand}
+              lastUpdateAgeSeconds={lastUpdateAgeSeconds}
             />
           )}
           {activePage === "batch" && <BatchPlanningPage />}
@@ -468,7 +492,13 @@ function DashboardPage({
   fanInState,
   fanOutState,
   sendControlCommand,
+  lastUpdateAgeSeconds,
+
 }) {
+
+  const isStale =
+  lastUpdateAgeSeconds !== null && lastUpdateAgeSeconds > 60; // 60s example
+
   return (
     <>
       {sensorError && (
@@ -504,103 +534,199 @@ function DashboardPage({
             gap: 12,
           }}
         >
-          <ParamCard
+      <ParamCard
   icon="🌡️"
   title="Temperature"
   value={
-    latestSensor && typeof latestSensor.temperature === "number"
+    !latestSensor || isStale
+      ? "—"
+      : typeof latestSensor.temperature === "number"
       ? `${latestSensor.temperature.toFixed(1)}°C`
-      : sensorLoading ? "Loading..." : "—"
+      : sensorLoading
+      ? "Loading..."
+      : "—"
   }
-  status={getTemperatureStatus(latestSensor?.temperature).text}
-  statusColor={getTemperatureStatus(latestSensor?.temperature).color}
+  status={
+    !latestSensor || isStale
+      ? "No recent data"
+      : getTemperatureStatus(latestSensor?.temperature).text
+  }
+  statusColor={
+    !latestSensor || isStale
+      ? "#9ca3af"
+      : getTemperatureStatus(latestSensor?.temperature).color
+  }
   bgColor="#e0f2fe"
   note="Target: 24–26°C"
 />
+
 <ParamCard
   icon="💧"
   title="Humidity"
   value={
-    latestSensor && typeof latestSensor.humidity === "number"
+    !latestSensor || isStale
+      ? "—"
+      : typeof latestSensor.humidity === "number"
       ? `${latestSensor.humidity.toFixed(0)}%`
-      : sensorLoading ? "Loading..." : "—"
+      : sensorLoading
+      ? "Loading..."
+      : "—"
   }
-  status={getHumidityStatus(latestSensor?.humidity).text}
-  statusColor={getHumidityStatus(latestSensor?.humidity).color}
+  status={
+    !latestSensor || isStale
+      ? "No recent data"
+      : getHumidityStatus(latestSensor?.humidity).text
+  }
+  statusColor={
+    !latestSensor || isStale
+      ? "#9ca3af"
+      : getHumidityStatus(latestSensor?.humidity).color
+  }
   bgColor="#dcfce7"
   note="Target: 60–80%"
 />
 
          
-          <ParamCard
+      <ParamCard
   icon="☁️"
   title="Ammonia (NH₃)"
   value={
-    latestSensor && typeof latestSensor.ammonia === "number"
+    !latestSensor || isStale
+      ? "—"
+      : typeof latestSensor.ammonia === "number"
       ? `${latestSensor.ammonia.toFixed(1)} ppm`
-      : sensorLoading ? "Loading..." : "—"
+      : sensorLoading
+      ? "Loading..."
+      : "—"
   }
-  status={getAmmoniaStatus(latestSensor?.ammonia).text}
-  statusColor={getAmmoniaStatus(latestSensor?.ammonia).color}
+  status={
+    !latestSensor || isStale
+      ? "No recent data"
+      : getAmmoniaStatus(latestSensor?.ammonia).text
+  }
+  statusColor={
+    !latestSensor || isStale
+      ? "#9ca3af"
+      : getAmmoniaStatus(latestSensor?.ammonia).color
+  }
   bgColor="#fef3c7"
   note="Optimal: 0–5 ppm"
 />
-<ParamCard
+    <ParamCard
   icon="💨"
   title="Methane (CH₄)"
   value={
-    latestSensor && typeof latestSensor.methane === "number"
+    !latestSensor || isStale
+      ? "—"
+      : typeof latestSensor.methane === "number"
       ? `${latestSensor.methane.toFixed(1)} ppm`
-      : sensorLoading ? "Loading..." : "—"
+      : sensorLoading
+      ? "Loading..."
+      : "—"
   }
-  status={getMethaneStatus(latestSensor?.methane).text}
-  statusColor={getMethaneStatus(latestSensor?.methane).color}
+  status={
+    !latestSensor || isStale
+      ? "No recent data"
+      : getMethaneStatus(latestSensor?.methane).text
+  }
+  statusColor={
+    !latestSensor || isStale
+      ? "#9ca3af"
+      : getMethaneStatus(latestSensor?.methane).color
+  }
   bgColor="#fecaca"
   note="Optimal: 0–2 ppm"
 />
 
-          
+
           <ParamCard
   icon="📄"
   title="Positive Pressure Fan"
   value={
-    latestSensor && typeof latestSensor.fanIntakeRpm === "number"
+    !latestSensor || isStale
+      ? "—"
+      : typeof latestSensor.fanIntakeRpm === "number"
       ? `${latestSensor.fanIntakeRpm.toFixed(0)} rpm`
-      : sensorLoading ? "Loading..." : "—"
+      : sensorLoading
+      ? "Loading..."
+      : "—"
   }
-  status={getFanStatus(latestSensor?.fanIntakeRpm, latestSensor?.fanIntakeDuty).text}
-  statusColor={getFanStatus(latestSensor?.fanIntakeRpm, latestSensor?.fanIntakeDuty).color}
+  status={
+    !latestSensor || isStale
+      ? "No recent data"
+      : getFanStatus(
+          latestSensor?.fanIntakeRpm,
+          latestSensor?.fanIntakeDuty
+        ).text
+  }
+  statusColor={
+    !latestSensor || isStale
+      ? "#9ca3af"
+      : getFanStatus(
+          latestSensor?.fanIntakeRpm,
+          latestSensor?.fanIntakeDuty
+        ).color
+  }
   bgColor="#cffafe"
   note="Intake fan"
 />
-
-          <ParamCard
+<ParamCard
   icon="📄"
   title="Exhaust Fan"
   value={
-    latestSensor && typeof latestSensor.fanExhaustRpm === "number"
+    !latestSensor || isStale
+      ? "—"
+      : typeof latestSensor.fanExhaustRpm === "number"
       ? `${latestSensor.fanExhaustRpm.toFixed(0)} rpm`
-      : sensorLoading ? "Loading..." : "—"
+      : sensorLoading
+      ? "Loading..."
+      : "—"
   }
-  status={getFanStatus(latestSensor?.fanExhaustRpm, latestSensor?.fanExhaustDuty).text}
-  statusColor={getFanStatus(latestSensor?.fanExhaustRpm, latestSensor?.fanExhaustDuty).color}
+  status={
+    !latestSensor || isStale
+      ? "No recent data"
+      : getFanStatus(
+          latestSensor?.fanExhaustRpm,
+          latestSensor?.fanExhaustDuty
+        ).text
+  }
+  statusColor={
+    !latestSensor || isStale
+      ? "#9ca3af"
+      : getFanStatus(
+          latestSensor?.fanExhaustRpm,
+          latestSensor?.fanExhaustDuty
+        ).color
+  }
   bgColor="#cffafe"
   note="Exhaust fan"
 />
-
-          <ParamCard
+<ParamCard
   icon="☀️"
   title="Lighting"
   value={
-    latestSensor && typeof latestSensor.lightStatus === "string"
+    !latestSensor || isStale
+      ? "—"
+      : typeof latestSensor.lightStatus === "string"
       ? latestSensor.lightStatus
-      : sensorLoading ? "Loading..." : "—"
+      : sensorLoading
+      ? "Loading..."
+      : "—"
   }
-  status={getLightStatus(latestSensor?.lightStatus).text}
-  statusColor={getLightStatus(latestSensor?.lightStatus).color}
+  status={
+    !latestSensor || isStale
+      ? "No recent data"
+      : getLightStatus(latestSensor?.lightStatus).text
+  }
+  statusColor={
+    !latestSensor || isStale
+      ? "#9ca3af"
+      : getLightStatus(latestSensor?.lightStatus).color
+  }
   bgColor="#fef08a"
   note="20–40 lux"
 />
+
 
         </div>
       </section>
