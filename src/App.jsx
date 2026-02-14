@@ -164,35 +164,68 @@ useEffect(() => {
     return () => clearInterval(intervalId);
   }, []);
 
-  // ===== CONTROL ACTUATORS =====
-  const sendControlCommand = async (target, state) => {
-    try {
-      const res = await fetch(`${BACKEND_URL}/api/control`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ target, state }),
-      });
+  // ===== CONTROL ACTUATORS (NEW, TWO-WAY) =====
+const sendControlCommand = async (target, state) => {
+  try {
+    // Map frontend target/state -> backend device/mode
+    let device = "";
+    let mode = "";
+    let timerDuration = undefined;
 
-      if (!res.ok) {
-        throw new Error("Failed to send control command");
+    if (target === "light") {
+      device = "light";
+      mode = state === "ON" ? "FORCE_ON" : "FORCE_OFF";
+    } else if (target === "fanIntake") {
+      device = "fan_positive";
+      mode = state === "ON" ? "FORCE_ON" : "FORCE_OFF";
+    } else if (target === "fanExhaust") {
+      device = "fan_negative";
+      mode = state === "ON" ? "FORCE_ON" : "FORCE_OFF";
+    } else if (target === "pressureWasher") {
+      device = "pressure_washer";
+      mode = state === "ON" ? "FORCE_ON" : "FORCE_OFF";
+      // 45-second cycle tulad sa UI mo
+      if (state === "ON") {
+        timerDuration = 45;
       }
-
-      const result = await res.json();
-      console.log("Control command sent:", result);
-
-      // Update local state
-      if (target === "light") setLightsState(state);
-      if (target === "fanIntake") setFanInState(state);
-      if (target === "fanExhaust") setFanOutState(state);
-      if (target === "pressureWasher") {
-        setWasherRunning(state === "ON");
-        if (state === "ON") setWasherTime(45);
-      }
-    } catch (err) {
-      console.error("Error sending control command:", err);
-      alert("Failed to send command: " + err.message);
+    } else {
+      throw new Error("Unknown target: " + target);
     }
-  };
+
+    const body = { device, mode };
+    if (timerDuration !== undefined) {
+      body.timerDuration = timerDuration;
+    }
+
+    const res = await fetch(`${BACKEND_URL}/api/control`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+    });
+
+    if (!res.ok) {
+      const errText = await res.text();
+      console.error("Backend error:", errText);
+      throw new Error("Failed to send control command");
+    }
+
+    const result = await res.json();
+    console.log("Control command sent:", result);
+
+    // Update local UI state (for instant feedback)
+    if (target === "light") setLightsState(state);
+    if (target === "fanIntake") setFanInState(state);
+    if (target === "fanExhaust") setFanOutState(state);
+    if (target === "pressureWasher") {
+      setWasherRunning(state === "ON");
+      if (state === "ON") setWasherTime(45);
+    }
+  } catch (err) {
+    console.error("Error sending control command:", err);
+    alert("Failed to send command: " + err.message);
+  }
+};
+
 
   // ===== PRESSURE WASHER TIMER =====
   useEffect(() => {
