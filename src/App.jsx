@@ -71,8 +71,7 @@ function App() {
 
   // Actuator states
   const [lightsState, setLightsState] = useState("OFF");
-  const [fanInState, setFanInState] = useState("OFF");
-  const [fanOutState, setFanOutState] = useState("OFF");
+  const [fanState, setFanState] = useState("OFF");
   const [washerRunning, setWasherRunning] = useState(false);
   const [washerTime, setWasherTime] = useState(45);
 
@@ -175,11 +174,9 @@ const sendControlCommand = async (target, state) => {
     if (target === "light") {
       device = "light";
       mode = state === "ON" ? "FORCE_ON" : "FORCE_OFF";
-    } else if (target === "fanIntake") {
+    } else if (target === "fan") {
+      // Single fan control, mapped to fan_positive in backend
       device = "fan_positive";
-      mode = state === "ON" ? "FORCE_ON" : "FORCE_OFF";
-    } else if (target === "fanExhaust") {
-      device = "fan_negative";
       mode = state === "ON" ? "FORCE_ON" : "FORCE_OFF";
     } else if (target === "pressureWasher") {
       device = "pressure_washer";
@@ -214,8 +211,7 @@ const sendControlCommand = async (target, state) => {
 
     // Update local UI state (for instant feedback)
     if (target === "light") setLightsState(state);
-    if (target === "fanIntake") setFanInState(state);
-    if (target === "fanExhaust") setFanOutState(state);
+    if (target === "fan") setFanState(state);
     if (target === "pressureWasher") {
       setWasherRunning(state === "ON");
       if (state === "ON") setWasherTime(45);
@@ -225,6 +221,7 @@ const sendControlCommand = async (target, state) => {
     alert("Failed to send command: " + err.message);
   }
 };
+
 
 
   // ===== PRESSURE WASHER TIMER =====
@@ -479,19 +476,19 @@ const sendControlCommand = async (target, state) => {
         {/* CONTENT AREA */}
         <div style={{ padding: 24, maxWidth: 1400, margin: "0 auto" }}>
           {activePage === "dashboard" && (
-            <DashboardPage
-              chartData={chartData}
-              washerRunning={washerRunning}
-              washerTime={washerTime}
-              latestSensor={latestSensor}
-              sensorLoading={sensorLoading}
-              sensorError={sensorError}
-              lightsState={lightsState}
-              fanInState={fanInState}
-              fanOutState={fanOutState}
-              sendControlCommand={sendControlCommand}
-              lastUpdateAgeSeconds={lastUpdateAgeSeconds}
-            />
+           <DashboardPage
+  chartData={chartData}
+  washerRunning={washerRunning}
+  washerTime={washerTime}
+  latestSensor={latestSensor}
+  sensorLoading={sensorLoading}
+  sensorError={sensorError}
+  lightsState={lightsState}
+  fanState={fanState}
+  sendControlCommand={sendControlCommand}
+  lastUpdateAgeSeconds={lastUpdateAgeSeconds}
+/>
+
           )}
           {activePage === "batch" && <BatchPlanningPage />}
           {activePage === "alerts" && <AlertsPage />}
@@ -522,8 +519,7 @@ function DashboardPage({
   sensorLoading,
   sensorError,
   lightsState,
-  fanInState,
-  fanOutState,
+  fanState,
   sendControlCommand,
   lastUpdateAgeSeconds,
 
@@ -674,7 +670,7 @@ function DashboardPage({
 
           <ParamCard
   icon="📄"
-  title="Positive Pressure Fan"
+  title="Ventilation Fan"
   value={
     !latestSensor || isStale
       ? "—"
@@ -701,39 +697,9 @@ function DashboardPage({
         ).color
   }
   bgColor="#cffafe"
-  note="Intake fan"
+  note="Single shared fan (tach + PWM on same line)"
 />
-<ParamCard
-  icon="📄"
-  title="Exhaust Fan"
-  value={
-    !latestSensor || isStale
-      ? "—"
-      : typeof latestSensor.fanExhaustRpm === "number"
-      ? `${latestSensor.fanExhaustRpm.toFixed(0)} rpm`
-      : sensorLoading
-      ? "Loading..."
-      : "—"
-  }
-  status={
-    !latestSensor || isStale
-      ? "No recent data"
-      : getFanStatus(
-          latestSensor?.fanExhaustRpm,
-          latestSensor?.fanExhaustDuty
-        ).text
-  }
-  statusColor={
-    !latestSensor || isStale
-      ? "#9ca3af"
-      : getFanStatus(
-          latestSensor?.fanExhaustRpm,
-          latestSensor?.fanExhaustDuty
-        ).color
-  }
-  bgColor="#cffafe"
-  note="Exhaust fan"
-/>
+
 <ParamCard
   icon="☀️"
   title="Lighting"
@@ -795,19 +761,14 @@ function DashboardPage({
 
           {/* FANS */}
           <ControlPanel title="📄 Fan Control">
-            <ControlRow
-              label="Positive Pressure Fan"
-              state={fanInState}
-              onOn={() => sendControlCommand("fanIntake", "ON")}
-              onOff={() => sendControlCommand("fanIntake", "OFF")}
-            />
-            <ControlRow
-              label="Exhaust Fan"
-              state={fanOutState}
-              onOn={() => sendControlCommand("fanExhaust", "ON")}
-              onOff={() => sendControlCommand("fanExhaust", "OFF")}
-            />
-          </ControlPanel>
+  <ControlRow
+    label="Ventilation Fan (override)"
+    state={fanState}
+    onOn={() => sendControlCommand("fan", "ON")}
+    onOff={() => sendControlCommand("fan", "OFF")}
+  />
+</ControlPanel>
+
 
           {/* PRESSURE WASHER */}
           <ControlPanel title="💨 Pressure Washer">
